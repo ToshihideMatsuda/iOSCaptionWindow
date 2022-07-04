@@ -22,13 +22,17 @@ class ViewController: NSViewController {
     private let context = CIContext()
     private var audioInitialized = false
 
-    private var observer: NSObjectProtocol?
+    private var connectObserver: NSObjectProtocol?
+    private var disconnectObserver: NSObjectProtocol?
     private var targetRect: CGRect?
 
     deinit {
         stopRunning()
 
-        if let o = observer {
+        if let o = connectObserver {
+            NotificationCenter.default.removeObserver(o)
+        }
+        if let o = disconnectObserver {
             NotificationCenter.default.removeObserver(o)
         }
     }
@@ -51,11 +55,21 @@ class ViewController: NSViewController {
         if let device = devices.filter({ $0.modelID == "iOS Device" && $0.manufacturer == "Apple Inc." }).last {
             print(device)
             self.configureDevice(device: device)
-        } else {
-            observer = NotificationCenter.default.addObserver(forName: .AVCaptureDeviceWasConnected, object: nil, queue: .main) { (notification) in
-                print(notification)
-                guard let device = notification.object as? AVCaptureDevice else { return }
+        }
+        connectObserver = NotificationCenter.default.addObserver(forName: .AVCaptureDeviceWasConnected, object: nil, queue: .main) { (notification) in
+            print(notification)
+            guard let device = notification.object as? AVCaptureDevice else { return }
+            self.configureDevice(device: device)
+        }
+        
+        disconnectObserver = NotificationCenter.default.addObserver(forName: .AVCaptureDeviceWasDisconnected, object: nil, queue: .main) { (notification) in
+            let devices = AVCaptureDevice.DiscoverySession(deviceTypes: [.externalUnknown], mediaType: nil, position: .unspecified).devices
+            if let device = devices.filter({ $0.modelID == "iOS Device" && $0.manufacturer == "Apple Inc." }).last {
+                print(device)
                 self.configureDevice(device: device)
+            }
+            else {
+                self.stopRunning()
             }
         }
     }
@@ -63,6 +77,10 @@ class ViewController: NSViewController {
     private func configureDevice(device: AVCaptureDevice) {
         do {
             let input = try AVCaptureDeviceInput(device: device)
+            
+            session.inputs.forEach{ session.removeInput($0) }
+            session.outputs.forEach{ session.removeOutput($0) }
+            
             if session.canAddInput(input) {
                 session.addInput(input)
                 if session.canAddOutput(output) {
@@ -85,6 +103,7 @@ class ViewController: NSViewController {
     private func startRunning() {
         guard !session.isRunning else { return }
         session.startRunning()
+        self.imageView.isHidden = false
     }
 
     private func stopRunning() {
@@ -92,6 +111,12 @@ class ViewController: NSViewController {
         session.stopRunning()
         audioEngine.stop()
         playerNode.stop()
+        
+        session.inputs.forEach{ session.removeInput($0) }
+        session.outputs.forEach{ session.removeOutput($0) }
+        self.imageView.isHidden = true
+        self.imageView.image = nil
+        audioInitialized = false
     }
 
     private func resizeIfNeeded(w: CGFloat, h: CGFloat) {
@@ -103,7 +128,9 @@ class ViewController: NSViewController {
 }
 
 extension ViewController : AVCaptureVideoDataOutputSampleBufferDelegate,AVCaptureAudioDataOutputSampleBufferDelegate {
-
+    func captureOutput(_ output: AVCaptureOutput, didDrop sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        print("drop buffer")
+    }
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         
         if(output == self.output)
