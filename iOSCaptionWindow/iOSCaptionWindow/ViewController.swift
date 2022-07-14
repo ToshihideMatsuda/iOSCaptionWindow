@@ -23,7 +23,7 @@ class ViewController: NSViewController {
     private var audioInitialized = false
 
     private var observers:[NSObjectProtocol] = []
-    private var targetRect: CGRect?
+    public var targetRect: CGRect?
 
     deinit {
         stopRunning()
@@ -32,7 +32,9 @@ class ViewController: NSViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-
+        
+        commonDelegate.vc = self
+        
         // opt-in settings to find iOS physical devices
         var prop = CMIOObjectPropertyAddress(
             mSelector: CMIOObjectPropertySelector(kCMIOHardwarePropertyAllowScreenCaptureDevices),
@@ -119,9 +121,14 @@ class ViewController: NSViewController {
         targetRect = nil
     }
 
-    private func resizeIfNeeded(w: CGFloat, h: CGFloat) {
-        guard targetRect == nil else { return }
-        let rect = CGRect(x: 0, y: 0, width: w/2, height: h/2)
+    public func resizeIfNeeded(w: CGFloat, h: CGFloat) {
+        if targetRect != nil { return }
+        guard let window = self.view.window else { return }
+        var rate = min(window.frame.size.width/w,window.frame.size.height/h)
+        if let mainScreen = NSScreen.main{
+            rate = min(mainScreen.frame.size.width / w, min(mainScreen.frame.size.height / h, rate))
+        }
+        let rect = CGRect(x: 0, y: 0, width: w*rate, height: h*rate)
         self.imageView.frame = rect
         targetRect = rect
     }

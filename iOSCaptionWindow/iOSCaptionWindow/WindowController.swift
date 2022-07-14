@@ -17,4 +17,8 @@ extension WindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         NSApplication.shared.terminate(self)
     }
+    
+    func windowDidResize(_ notification: Notification) {
+        commonDelegate.vc?.targetRect = nil
+    }
 }
